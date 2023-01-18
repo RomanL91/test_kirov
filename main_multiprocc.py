@@ -3,44 +3,75 @@ import toml
 import requests
 import multiprocessing as mp
 
+from datetime import datetime
+
 
 NAME_CONFIG_FILE = 'conf.toml'
 
 
 urls = [
-    # 'http://localhost:3000/posts',
-    # 'http://localhost:3000/profile',
-    # 'http://localhost:3000/comments',
+    'http://localhost:3000/posts',
+    'http://localhost:3000/profile',
+    'http://localhost:3000/comments',
     'http://localhost:3000/public_data',
     'http://localhost:3000/danger_data',
 ]
 
 
-def get_request(url: str):
+def get_http_response(url: str):
+    '''
+    Получить http ответ.
+    Функция принимает url адрес в виде строки.
+    Возращает объект response.
+    Функция рекурсивная:
+        условия рекурсии: статус ответа не равно 200,
+        условия выхода: статус ответа 200.
+    '''
     try:
-        resp = requests.get(url=url)
-        print(f'url: {resp.url} --> status_code: {resp.status_code}')
-        if resp.status_code != 200:
-            return get_request(url=url)
-        return resp
+        response = requests.get(url=url)
+        print(
+            f'[INFO]: url: {response.url} --> status_code: {response.status_code}')
+        if response.status_code != 200:
+            return get_http_response(url=url)
+        return response
     except:
-        print(f'unavailable {url}')
+        print(f'[INFO]: unavailable {url}')
 
 
-def getting_request_data(urls: list):
+def combine_response_information(urls: list):
+    '''
+    Обьединить информацию ответов после выполненых запросов.
+    Принимает список url адресов.
+    Возращает список объектов response.
+    '''
     with mp.Pool(mp.cpu_count()) as pool:
-        resp = pool.map(func=get_request, iterable=urls)
-        print(resp)
-        return resp
-        
+        responses = pool.map(func=get_http_response, iterable=urls)
+        return responses
 
 
 def writer_config(data: dict) -> None:
+    '''
+    Функция создает конфигурационный файл.
+    Принимает словарь, где ключ - имя переменной в файле,
+    значение - значение этой переменной.
+    Ничего не возращает.
+    '''
     with open(NAME_CONFIG_FILE, 'w') as f:
-            toml.dump(o=data, f=f)
+        toml.dump(o=data, f=f)
 
 
-def main(urls: list) -> None:
+def main(urls: list) -> list:
+    '''
+    Основная функция.
+    Возращает список, как следствие выполнение подфункции:
+        combine_response_information.
+    В ней прописана логика валидации пользовательского ввода,
+    а так же проверки существования конфиг файла, и
+    валидация содердимого этого файла.
+    Если пройдены все проверки - выполняется блок:
+        if content_file['IS_START'] с запуском вложенных в него
+        функций: get_http_response, combine_response_information
+    '''
     while True:
         chech_file = os.path.isfile(path=NAME_CONFIG_FILE)
 
@@ -49,32 +80,33 @@ def main(urls: list) -> None:
             try:
                 value_is_start = content_file['IS_START']
                 if value_is_start != 1 and value_is_start != 0:
-                    print('ne dopustimoe znachenie IS_START v file config')
+                    print(
+                        f'Invalid IS_START value in configuration file: {NAME_CONFIG_FILE}.')
                     break
             except KeyError:
-                print('param IS_START ne nayden in conf.toml')
+                print(
+                    f'IS_START parameter not found in configuration file: {NAME_CONFIG_FILE}.')
                 break
             if content_file['IS_START']:
-                getting_request_data(urls=urls)            
+                combine_response_information(urls=urls)
                 break
             else:
                 try:
-                    val = int(input('input int value: '))
+                    val = int(input('Enter value [0 or 1]: '))
                     if val == 0:
                         continue
                     elif val == 1:
                         content_file['IS_START'] = val
                         writer_config(data=content_file)
                     else:
-                        print('input only 0 or 1')
+                        print('Only [0 or 1] can be entered.')
                 except ValueError as e:
-                    print('value dojno but INT!')
+                    print('Value cannot be a character or string.')
         else:
             writer_config(data={'IS_START': 0})
 
 
-
-
-
 if __name__ == '__main__':
+    start_time = datetime.now()
     main(urls=urls)
+    print(datetime.now() - start_time)
